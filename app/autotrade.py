@@ -5,6 +5,7 @@ import os
 import sqlite3  # SQLite 추가
 import time
 from datetime import datetime
+from typing import Any, cast
 
 import pyupbit
 import requests
@@ -209,7 +210,11 @@ class TradeManager:
 
     def execute_market_sell(self, amount):
         """시장가 매도 주문 실행"""
-        current_price = float(pyupbit.get_current_price(self.ticker))
+        price = pyupbit.get_current_price(self.ticker)
+        if price is None:
+            return None
+        # 타입 체커를 위해 명시적 캐스팅
+        current_price = float(cast(float | str, price))
         if amount * current_price >= self.MIN_TRADE_AMOUNT:
             return self.upbit.sell_market_order(self.ticker, amount)
         return None
@@ -233,11 +238,13 @@ class TradeManager:
 
     def get_current_balances(self):
         """현재 잔고 상태 조회"""
+        price = pyupbit.get_current_price(self.ticker)
+        btc_krw_price = float(cast(float | str, price)) if price is not None else 0.0
         return {
             "btc_balance": float(self.upbit.get_balance(self.ticker)),
             "krw_balance": float(self.upbit.get_balance("KRW")),
             "btc_avg_buy_price": float(self.upbit.get_avg_buy_price(self.ticker)),
-            "btc_krw_price": float(pyupbit.get_current_price(self.ticker)),
+            "btc_krw_price": btc_krw_price,
         }
 
 
@@ -330,8 +337,10 @@ class EnhancedCryptoTrader:
             recent_reflections = self.db.get_reflection_history(5)
 
             # 현재 시장 상태 조회
+            price = pyupbit.get_current_price(self.ticker)
+            market_price = float(cast(float | str, price)) if price is not None else 0.0
             current_market = {
-                "price": float(pyupbit.get_current_price(self.ticker)),
+                "price": market_price,
                 "status": self.get_current_status(),
                 "fear_greed": self.get_fear_greed_index(),
                 "technical": self.get_ohlcv_data(),
@@ -366,7 +375,10 @@ class EnhancedCryptoTrader:
                 response_format={"type": "json_object"},
             )
             print("2")
-            reflection = json.loads(response.choices[0].message.content)
+            content = response.choices[0].message.content
+            if content is None:
+                raise ValueError("Empty response from OpenAI")
+            reflection = json.loads(content)
 
             # 반성 일기 저장
             reflection_data = {
@@ -438,29 +450,29 @@ class EnhancedCryptoTrader:
     def add_technical_indicators(self, df):
         """기술적 분석 지표 추가"""
         # 볼린저 밴드
-        indicator_bb = ta.volatility.BollingerBands(close=df["close"])
+        indicator_bb = ta.volatility.BollingerBands(close=df["close"])  # type: ignore[attr-defined]
         df["bb_high"] = indicator_bb.bollinger_hband()
         df["bb_mid"] = indicator_bb.bollinger_mavg()
         df["bb_low"] = indicator_bb.bollinger_lband()
         df["bb_pband"] = indicator_bb.bollinger_pband()
 
         # RSI
-        df["rsi"] = ta.momentum.RSIIndicator(close=df["close"]).rsi()
+        df["rsi"] = ta.momentum.RSIIndicator(close=df["close"]).rsi()  # type: ignore[attr-defined]
 
         # MACD
-        macd = ta.trend.MACD(close=df["close"])
+        macd = ta.trend.MACD(close=df["close"])  # type: ignore[attr-defined]
         df["macd"] = macd.macd()
         df["macd_signal"] = macd.macd_signal()
         df["macd_diff"] = macd.macd_diff()
 
         # 이동평균선
-        df["ma5"] = ta.trend.SMAIndicator(close=df["close"], window=5).sma_indicator()
-        df["ma20"] = ta.trend.SMAIndicator(close=df["close"], window=20).sma_indicator()
-        df["ma60"] = ta.trend.SMAIndicator(close=df["close"], window=60).sma_indicator()
-        df["ma120"] = ta.trend.SMAIndicator(close=df["close"], window=120).sma_indicator()
+        df["ma5"] = ta.trend.SMAIndicator(close=df["close"], window=5).sma_indicator()  # type: ignore[attr-defined]
+        df["ma20"] = ta.trend.SMAIndicator(close=df["close"], window=20).sma_indicator()  # type: ignore[attr-defined]
+        df["ma60"] = ta.trend.SMAIndicator(close=df["close"], window=60).sma_indicator()  # type: ignore[attr-defined]
+        df["ma120"] = ta.trend.SMAIndicator(close=df["close"], window=120).sma_indicator()  # type: ignore[attr-defined]
 
         # ATR
-        df["atr"] = ta.volatility.AverageTrueRange(
+        df["atr"] = ta.volatility.AverageTrueRange(  # type: ignore[attr-defined]
             high=df["high"], low=df["low"], close=df["close"]
         ).average_true_range()
 
@@ -469,10 +481,15 @@ class EnhancedCryptoTrader:
     def get_current_status(self):
         """현재 투자 상태 조회"""
         try:
-            krw_balance = float(self.upbit.get_balance("KRW"))
-            crypto_balance = float(self.upbit.get_balance(self.ticker))
-            avg_buy_price = float(self.upbit.get_avg_buy_price(self.ticker))
-            current_price = float(pyupbit.get_current_price(self.ticker))
+            krw_bal = self.upbit.get_balance("KRW")
+            crypto_bal = self.upbit.get_balance(self.ticker)
+            avg_price = self.upbit.get_avg_buy_price(self.ticker)
+            price = pyupbit.get_current_price(self.ticker)
+
+            krw_balance = float(cast(float | str, krw_bal)) if krw_bal is not None else 0.0
+            crypto_balance = float(cast(float | str, crypto_bal)) if crypto_bal is not None else 0.0
+            avg_buy_price = float(cast(float | str, avg_price)) if avg_price is not None else 0.0
+            current_price = float(cast(float | str, price)) if price is not None else 0.0
 
             print("\n=== Current Investment Status ===")
             print(f"보유 현금: {krw_balance:,.0f} KRW")
@@ -504,20 +521,25 @@ class EnhancedCryptoTrader:
     def get_orderbook_data(self):
         """호가 데이터 조회"""
         try:
-            orderbook = pyupbit.get_orderbook(ticker=self.ticker)
-            if not orderbook or len(orderbook) == 0:
+            orderbook_raw = pyupbit.get_orderbook(ticker=self.ticker)
+            if not orderbook_raw or len(orderbook_raw) == 0:
                 return None
+
+            # 타입 체커를 위해 딕셔너리로 명시적 캐스팅
+            orderbook = cast(dict[str, Any], orderbook_raw)
 
             ask_prices = []
             ask_sizes = []
             bid_prices = []
             bid_sizes = []
 
-            for unit in orderbook["orderbook_units"][:5]:
-                ask_prices.append(unit["ask_price"])
-                ask_sizes.append(unit["ask_size"])
-                bid_prices.append(unit["bid_price"])
-                bid_sizes.append(unit["bid_size"])
+            orderbook_units = orderbook.get("orderbook_units", [])
+            for unit in orderbook_units[:5]:
+                unit_dict = cast(dict[str, Any], unit)
+                ask_prices.append(unit_dict["ask_price"])
+                ask_sizes.append(unit_dict["ask_size"])
+                bid_prices.append(unit_dict["bid_price"])
+                bid_sizes.append(unit_dict["bid_size"])
 
             return {
                 "timestamp": datetime.fromtimestamp(orderbook["timestamp"] / 1000).strftime(
@@ -576,6 +598,7 @@ class EnhancedCryptoTrader:
 
     def capture_and_analyze_chart(self):
         """차트 캡처 및 분석"""
+        screenshot_path = None
         try:
             current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
             screenshot_path = f"chart_{current_time}.png"
@@ -615,13 +638,14 @@ class EnhancedCryptoTrader:
             analysis_result = response.choices[0].message.content
 
             # 임시 파일 삭제
-            os.remove(screenshot_path)
+            if screenshot_path and os.path.exists(screenshot_path):
+                os.remove(screenshot_path)
 
             return analysis_result
 
         except Exception as e:
             print(f"Error in capture_and_analyze_chart: {e}")
-            if os.path.exists(screenshot_path):
+            if screenshot_path and os.path.exists(screenshot_path):
                 os.remove(screenshot_path)
             return None
 
@@ -757,7 +781,10 @@ class EnhancedCryptoTrader:
             )
 
             try:
-                analysis_result = json.loads(response.choices[0].message.content)
+                content = response.choices[0].message.content
+                if content is None:
+                    return None
+                analysis_result = json.loads(content)
                 return analysis_result
             except json.JSONDecodeError as e:
                 print(f"JSON Parsing Error: {e}")
@@ -861,7 +888,10 @@ class EnhancedCryptoTrader:
             )
 
             # 응답 파싱
-            result = json.loads(response.choices[0].message.content)
+            content = response.choices[0].message.content
+            if content is None:
+                return None
+            result = json.loads(content)
 
             return result
 
@@ -878,25 +908,29 @@ class EnhancedCryptoTrader:
 
             if confidence_score > 70:
                 if decision == "buy":
-                    krw = self.upbit.get_balance("KRW")
-                    if krw > 5000:
-                        order_amount = krw * trade_ratio
-                        order = self.trade_manager.execute_market_buy(order_amount)
+                    krw_bal = self.upbit.get_balance("KRW")
+                    if krw_bal is not None:
+                        krw = float(cast(float | str, krw_bal))
+                        if krw > 5000:
+                            order_amount = krw * trade_ratio
+                            order = self.trade_manager.execute_market_buy(order_amount)
 
-                        if order:
-                            print("\n=== Buy Order Executed ===")
-                            print(
-                                f"Trade Amount: {order_amount:,.0f} KRW ({trade_ratio * 100:.1f}%)"
-                            )
+                            if order:
+                                print("\n=== Buy Order Executed ===")
+                                print(
+                                    f"Trade Amount: {order_amount:,.0f} KRW ({trade_ratio * 100:.1f}%)"
+                                )
 
                 elif decision == "sell":
-                    btc = self.upbit.get_balance(self.ticker)
-                    sell_amount = btc * trade_ratio
-                    order = self.trade_manager.execute_market_sell(sell_amount)
+                    btc_bal = self.upbit.get_balance(self.ticker)
+                    if btc_bal is not None:
+                        btc = float(cast(float | str, btc_bal))
+                        sell_amount = btc * trade_ratio
+                        order = self.trade_manager.execute_market_sell(sell_amount)
 
-                    if order:
-                        print("\n=== Sell Order Executed ===")
-                        print(f"Trade Amount: {sell_amount:.8f} BTC ({trade_ratio * 100:.1f}%)")
+                        if order:
+                            print("\n=== Sell Order Executed ===")
+                            print(f"Trade Amount: {sell_amount:.8f} BTC ({trade_ratio * 100:.1f}%)")
 
             # 거래 상태 기록
             balances = self.trade_manager.get_current_balances()
@@ -947,13 +981,14 @@ def ai_trading():
                 print("\n=== Reflection-based Adjustments ===")
                 print(json.dumps(ai_result["reflection_based_adjustments"], indent=2))
 
-                trader.execute_trade(
-                    ai_result["decision"],
-                    ai_result["percentage"],
-                    ai_result["confidence_score"],
-                    fear_greed_data["current"]["value"],
-                    ai_result["reason"],
-                )
+                if fear_greed_data and "current" in fear_greed_data:
+                    trader.execute_trade(
+                        ai_result["decision"],
+                        ai_result["percentage"],
+                        ai_result["confidence_score"],
+                        fear_greed_data["current"]["value"],
+                        ai_result["reason"],
+                    )
 
     except Exception as e:
         print(f"Error in ai_trading: {e}")

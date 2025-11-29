@@ -1,0 +1,12 @@
+{
+  "venvPath": ".",
+  "venv": ".venv",
+  "executionEnvironments": [
+    {
+      "root": "${workspaceFolder}",
+      "pythonVersion": "3.14",
+      "pythonPlatform": "Darwin",
+      "extraPaths": ["${workspaceFolder}/.venv/lib/python3.14/site-packages"]
+    }
+  ]
+}
