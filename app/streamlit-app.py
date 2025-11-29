@@ -123,7 +123,10 @@ st.subheader("📝 최근 거래 내역")
 recent_trades = trades_df[["timestamp", "decision", "percentage", "reason", "btc_krw_price"]].head(
     10
 )
-recent_trades["timestamp"] = recent_trades["timestamp"].dt.strftime("%Y-%m-%d %H:%M:%S")
+if not recent_trades.empty:
+    recent_trades = recent_trades.copy()
+    timestamp_series = pd.to_datetime(recent_trades["timestamp"])
+    recent_trades["timestamp"] = timestamp_series.dt.strftime("%Y-%m-%d %H:%M:%S")  # type: ignore[attr-defined]
 recent_trades.columns = ["시간", "결정", "변동률", "사유", "BTC 가격"]
 st.dataframe(recent_trades, use_container_width=True)
 
@@ -135,7 +138,10 @@ if not reflections_df.empty:
     recent_reflections = reflections_df.head(5)
 
     for _, reflection in recent_reflections.iterrows():
-        with st.expander(f"반성일기 - {reflection['reflection_date'].strftime('%Y-%m-%d')}"):
+        # reflection_date를 pd.Timestamp로 변환
+        reflection_date = pd.to_datetime(reflection["reflection_date"])
+        date_str = reflection_date.strftime("%Y-%m-%d")
+        with st.expander(f"반성일기 - {date_str}"):
             col1, col2 = st.columns(2)
             with col1:
                 st.write("**시장 상황:**", reflection["market_condition"])
