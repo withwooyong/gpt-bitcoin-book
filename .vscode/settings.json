@@ -31,7 +31,7 @@
 
   // Ruff 설정은 ruff.toml 파일에서 관리
   // ruff.lint.args는 더 이상 지원되지 않음 (ruff.toml의 select 설정 사용)
-  "ruff.lint.ignore": ["N813"],  // 한국어 클래스 이름 CapWords 규칙 무시
+  "ruff.lint.ignore": ["N813"], // 한국어 클래스 이름 CapWords 규칙 무시
 
   // Python path 설정
   "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
@@ -57,5 +57,7 @@
     "*.sql": "sql"
   },
   "editor.formatOnPaste": true,
-  "editor.formatOnSave": true
+  "editor.formatOnSave": true,
+  "cursorpyright.analysis.extraPaths": ["${workspaceFolder}"],
+  "cursorpyright.analysis.typeCheckingMode": "basic"
 }
