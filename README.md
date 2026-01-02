@@ -1,6 +1,7 @@
 조코딩의 AI 비트코인 자동 매매 시스템 만들기
 
 https://www.hanbit.co.kr/store/books/look.php?p_code=B5063161940&type=book
+
 https://abrasive-detective-fdd.notion.site/GPT-AI-240567bebf704f29adb6cc7bd61962fc
 
 목차
